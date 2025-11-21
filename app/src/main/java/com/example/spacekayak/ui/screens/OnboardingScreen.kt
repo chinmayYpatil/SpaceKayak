@@ -21,30 +21,43 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.accompanist.pager.*
 import kotlinx.coroutines.launch
+import androidx.compose.ui.draw.blur
+import com.example.spacekayak.viewmodel.AuthViewModel
 
+@OptIn(ExperimentalPagerApi::class)
 @Composable
 fun OnboardingScreen(
+    authViewModel: AuthViewModel,
     onFinished: () -> Unit
 ) {
     val pages = listOf(OnboardingPage.First, OnboardingPage.Second, OnboardingPage.Third)
     val pagerState = rememberPagerState()
     val scope = rememberCoroutineScope()
+    val showModal by authViewModel.showPhoneVerificationModal.collectAsState()
 
     Box(
         modifier = Modifier.fillMaxSize()
     ) {
-        HorizontalPager(
-            count = 3,
-            state = pagerState,
-            modifier = Modifier.fillMaxSize()
-        ) { position ->
-            PagerScreen(page = pages[position])
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .blur(if (showModal) 20.dp else 0.dp)
+        ) {
+            HorizontalPager(
+                count = 3,
+                state = pagerState,
+                modifier = Modifier.fillMaxSize()
+            ) { position ->
+                PagerScreen(page = pages[position])
+            }
         }
 
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 40.dp)
+                .fillMaxWidth()
+                .blur(if (showModal) 20.dp else 0.dp)
         ) {
             Row(
                 modifier = Modifier
@@ -87,6 +100,8 @@ fun OnboardingScreen(
                 )
             }
         }
+
+        AuthFlowModal(viewModel = authViewModel)
     }
 }
 

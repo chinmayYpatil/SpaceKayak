@@ -13,12 +13,6 @@ class OnboardingViewModel(app: Application) : AndroidViewModel(app) {
     private val _startDestination = MutableStateFlow(Routes.ONBOARDING)
     val startDestination = _startDestination.asStateFlow()
 
-    init {
-        if (storage.isOnboardingFinished()) {
-            _startDestination.value = Routes.PRIVACY_CONSENT
-        }
-    }
-
     fun completeOnboarding() {
         storage.saveOnboarding(true)
     }

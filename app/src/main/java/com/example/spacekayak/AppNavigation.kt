@@ -8,24 +8,29 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.compose.ui.Modifier
-import com.example.spacekayak.ui.screens.* import com.example.spacekayak.viewmodel.OnboardingViewModel
+import androidx.navigation.NavHostController
+import com.example.spacekayak.ui.screens.*
+import com.example.spacekayak.viewmodel.OnboardingViewModel
+import com.example.spacekayak.viewmodel.AuthViewModel
 
 object Routes {
     const val ONBOARDING = "onboarding"
     const val PRIVACY_CONSENT = "privacy_consent"
 }
+
+fun NavHostController.navigateToPhoneVerificationModal() {
+    this.navigate(Routes.ONBOARDING) {
+        popUpTo(Routes.PRIVACY_CONSENT) { inclusive = true }
+    }
+}
+
 @Composable
 fun AppNavigation(modifier: Modifier = Modifier) {
 
     val navController = rememberNavController()
     val onboardingViewModel: OnboardingViewModel = viewModel()
+    val authViewModel: AuthViewModel = viewModel()
     val startDestination by onboardingViewModel.startDestination.collectAsState()
-
-    val safeStart = when (startDestination) {
-        Routes.ONBOARDING -> Routes.ONBOARDING
-        Routes.PRIVACY_CONSENT -> Routes.PRIVACY_CONSENT
-        else -> Routes.ONBOARDING
-    }
 
     NavHost(
         navController = navController,
@@ -34,6 +39,7 @@ fun AppNavigation(modifier: Modifier = Modifier) {
     ) {
         composable(Routes.ONBOARDING) {
             OnboardingScreen(
+                authViewModel = authViewModel,
                 onFinished = {
                     onboardingViewModel.completeOnboarding()
                     navController.navigate(Routes.PRIVACY_CONSENT) {
@@ -46,9 +52,8 @@ fun AppNavigation(modifier: Modifier = Modifier) {
         composable(Routes.PRIVACY_CONSENT) {
             PrivacyConsentScreen(
                 onUnderstand = {
-                    navController.navigate(Routes.ONBOARDING) {
-                        popUpTo(0) { inclusive = true }
-                    }
+                    authViewModel.showPhoneVerificationModal()
+                    navController.navigateToPhoneVerificationModal()
                 }
             )
         }
