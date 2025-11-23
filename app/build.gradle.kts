@@ -7,6 +7,7 @@ plugins {
 android {
     namespace = "com.example.spacekayak"
     compileSdk {
+        // Ensure this matches your specific AGP/SDK configuration logic
         version = release(36)
     }
 
@@ -64,4 +65,12 @@ dependencies {
     implementation("com.google.accompanist:accompanist-pager:0.32.0")
     implementation("com.google.accompanist:accompanist-pager-indicators:0.32.0")
 
+
+    // Supabase Dependencies
+    implementation(platform("io.github.jan-tennert.supabase:bom:3.2.6"))
+    implementation("io.github.jan-tennert.supabase:auth-kt")
+
+    // 🔥 REQUIRED FIX: Ktor Client Engine for Android
+    // This resolves "Failed to find HTTP client engine implementation"
+    implementation("io.ktor:ktor-client-android:3.1.1")
 }

@@ -1,9 +1,11 @@
-// Manages authentication state and logic, including random OTP generation and notification.
-
 package com.example.spacekayak.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.spacekayak.data.supabase // Import the client instance from SupabaseClient.kt
+import io.github.jan.supabase.auth.OtpType
+import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.auth.providers.builtin.OTP
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,23 +30,24 @@ class AuthViewModel: ViewModel() {
     private val _resendTimer = MutableStateFlow(0)
     val resendTimer: StateFlow<Int> = _resendTimer
 
-    private val _showSmsNotification = MutableStateFlow(false)
-    val showSmsNotification: StateFlow<Boolean> = _showSmsNotification
+    private val _isLoading = MutableStateFlow(false)
+    val isLoading: StateFlow<Boolean> = _isLoading
 
-    private val _generatedOtp = MutableStateFlow("123456")
-    val generatedOtp: StateFlow<String> = _generatedOtp
+    private val _errorMessage = MutableStateFlow<String?>(null)
+    val errorMessage: StateFlow<String?> = _errorMessage
 
-    private fun generateRandomOtp(): String {
-        return (100000..999999).random().toString()
-    }
+    private fun getFullPhoneNumber(): String = "+91${_phoneNumber.value}"
 
     fun showPhoneVerificationModal() {
         _showPhoneVerificationModal.value = true
+        _errorMessage.value = null
     }
 
     fun hidePhoneVerificationModal() {
         _showPhoneVerificationModal.value = false
         _authState.value = 0
+        _otpInput.value = ""
+        _errorMessage.value = null
     }
 
     fun updatePhoneNumber(newNumber: String) {
@@ -56,13 +59,27 @@ class AuthViewModel: ViewModel() {
     }
 
     fun sendOtp() {
-        _authState.value = 1
-        viewModelScope.launch {
-            delay(1000L)
+        _errorMessage.value = null
+        _isLoading.value = true
+        val fullNumber = getFullPhoneNumber()
 
-            _generatedOtp.value = generateRandomOtp()
-            startResendTimer()
-            showIncomingSmsNotification()
+        viewModelScope.launch {
+            try {
+                // Supabase Auth v3 syntax for OTP
+                supabase.auth.signInWith(OTP) {
+                    phone = fullNumber
+                    // Optional: createUser = true (default is usually true, but depends on config)
+                }
+
+                _authState.value = 1
+                startResendTimer()
+
+            } catch (e: Exception) {
+                e.printStackTrace()
+                _errorMessage.value = "Failed to send OTP. Please check the number and try again."
+            } finally {
+                _isLoading.value = false
+            }
         }
     }
 
@@ -77,25 +94,33 @@ class AuthViewModel: ViewModel() {
         }
     }
 
-    fun showIncomingSmsNotification() {
-        viewModelScope.launch {
-            _showSmsNotification.value = true
-            delay(10000L)
-            _showSmsNotification.value = false
-        }
-    }
-
     fun resendOtp() {
-        // Supabase resend OTP function call
-        _generatedOtp.value = generateRandomOtp()
-        startResendTimer()
-        showIncomingSmsNotification()
+        sendOtp()
     }
 
     fun verifyOtp() {
+        _errorMessage.value = null
+        _isLoading.value = true
+        val fullNumber = getFullPhoneNumber()
+        val otp = _otpInput.value
 
-        // Supabase OTP verification function call
-        hidePhoneVerificationModal()
+        viewModelScope.launch {
+            try {
+                // Supabase Auth v3 syntax for verifying Phone OTP
+                supabase.auth.verifyPhoneOtp(
+                    phone = fullNumber,
+                    token = otp,
+                    type = OtpType.Phone.SMS
+                )
+                hidePhoneVerificationModal()
+
+            } catch (e: Exception) {
+                e.printStackTrace()
+                _errorMessage.value = "OTP verification failed. Please check the code and try again."
+            } finally {
+                _isLoading.value = false
+            }
+        }
     }
 
     override fun onCleared() {

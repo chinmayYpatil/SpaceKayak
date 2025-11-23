@@ -31,8 +31,6 @@ import com.example.spacekayak.viewmodel.AuthViewModel
 fun AuthFlowModal(viewModel: AuthViewModel) {
     val isVisible by viewModel.showPhoneVerificationModal.collectAsState()
     val authState by viewModel.authState.collectAsState()
-    val showSmsNotification by viewModel.showSmsNotification.collectAsState()
-    val generatedOtp by viewModel.generatedOtp.collectAsState()
 
     AnimatedVisibility(
         visible = isVisible,
@@ -44,10 +42,9 @@ fun AuthFlowModal(viewModel: AuthViewModel) {
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = 0.5f)),
         ) {
-            // Modal content is explicitly aligned to the bottom
             Column(
                 modifier = Modifier
-                    .align(Alignment.BottomCenter) // Explicitly align modal to the bottom
+                    .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
                     .background(Color(0xFF0C2442))
@@ -65,13 +62,6 @@ fun AuthFlowModal(viewModel: AuthViewModel) {
                     }
                 }
             }
-
-            // Notification content is explicitly aligned to the top center
-            IncomingSmsNotification(
-                show = showSmsNotification,
-                otp = generatedOtp,
-                modifier = Modifier.align(Alignment.TopCenter) // Align notification to top center
-            )
         }
     }
 }
@@ -79,6 +69,8 @@ fun AuthFlowModal(viewModel: AuthViewModel) {
 @Composable
 fun PhoneInputScreen(viewModel: AuthViewModel) {
     val phoneNumber by viewModel.phoneNumber.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+    val errorMessage by viewModel.errorMessage.collectAsState()
 
     Column(
         modifier = Modifier
@@ -130,7 +122,19 @@ fun PhoneInputScreen(viewModel: AuthViewModel) {
                 shape = RoundedCornerShape(8.dp),
                 modifier = Modifier
                     .weight(1f)
-                    .height(56.dp)
+                    .height(56.dp),
+                enabled = !isLoading
+            )
+        }
+
+        if (errorMessage != null) {
+            Text(
+                text = errorMessage!!,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+                    .padding(top = 8.dp)
             )
         }
 
@@ -144,13 +148,17 @@ fun PhoneInputScreen(viewModel: AuthViewModel) {
                 .height(56.dp),
             colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
             shape = RoundedCornerShape(30.dp),
-            enabled = phoneNumber.length == 10
+            enabled = phoneNumber.length == 10 && !isLoading
         ) {
-            Text(
-                text = "Continue",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold
-            )
+            if (isLoading) {
+                CircularProgressIndicator(color = Color.White)
+            } else {
+                Text(
+                    text = "Continue",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -165,6 +173,9 @@ fun OtpInputScreen(viewModel: AuthViewModel) {
     val otpInput by viewModel.otpInput.collectAsState()
     val timer by viewModel.resendTimer.collectAsState()
     val phoneNumber by viewModel.phoneNumber.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+    val errorMessage by viewModel.errorMessage.collectAsState()
+
 
     val length = 6
     val focusRequesters = remember { List(length) { FocusRequester() } }
@@ -200,22 +211,35 @@ fun OtpInputScreen(viewModel: AuthViewModel) {
                 OtpCell(
                     value = otpInput.getOrNull(index)?.toString() ?: "",
                     onValueChange = { newValue ->
-                        if (newValue.length == 1) {
-                            // FIX: Added +1 to padEnd to prevent IndexOutOfBoundsException
-                            val newOtp = otpInput.padEnd(index + 1, ' ').replaceRange(index, index + 1, newValue)
-                            viewModel.updateOtpInput(newOtp.replace(" ", ""))
-                        } else if (newValue.isEmpty() && index > 0) {
-                            if (otpInput.isNotEmpty()) {
-                                val newOtp = otpInput.dropLast(1)
-                                viewModel.updateOtpInput(newOtp)
+                        if (!isLoading) {
+                            if (newValue.length == 1) {
+                                val newOtp = otpInput.padEnd(index + 1, ' ').replaceRange(index, index + 1, newValue)
+                                viewModel.updateOtpInput(newOtp.replace(" ", ""))
+                            } else if (newValue.isEmpty() && index > 0) {
+                                if (otpInput.isNotEmpty()) {
+                                    val newOtp = otpInput.dropLast(1)
+                                    viewModel.updateOtpInput(newOtp)
+                                }
+                                focusRequesters.getOrNull(index - 1)?.requestFocus()
                             }
-                            focusRequesters.getOrNull(index - 1)?.requestFocus()
                         }
                     },
                     modifier = Modifier.weight(1f).padding(horizontal = 4.dp),
-                    focusRequester = focusRequesters[index]
+                    focusRequester = focusRequesters[index],
+                    enabled = !isLoading
                 )
             }
+        }
+
+        if (errorMessage != null) {
+            Text(
+                text = errorMessage!!,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+                    .padding(top = 8.dp)
+            )
         }
 
         Spacer(modifier = Modifier.height(32.dp))
@@ -228,13 +252,17 @@ fun OtpInputScreen(viewModel: AuthViewModel) {
                 .height(56.dp),
             colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
             shape = RoundedCornerShape(30.dp),
-            enabled = otpInput.length == 6
+            enabled = otpInput.length == 6 && !isLoading
         ) {
-            Text(
-                text = "Verify",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold
-            )
+            if (isLoading) {
+                CircularProgressIndicator(color = Color.White)
+            } else {
+                Text(
+                    text = "Verify",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -252,7 +280,10 @@ fun OtpInputScreen(viewModel: AuthViewModel) {
                     fontSize = 14.sp
                 )
             } else {
-                TextButton(onClick = viewModel::resendOtp) {
+                TextButton(
+                    onClick = viewModel::resendOtp,
+                    enabled = !isLoading
+                ) {
                     Text(
                         text = "Resend Code",
                         color = PrimaryBlue,
@@ -260,57 +291,6 @@ fun OtpInputScreen(viewModel: AuthViewModel) {
                         fontSize = 14.sp
                     )
                 }
-            }
-        }
-    }
-}
-
-// Updated to accept a modifier and use it on the AnimatedVisibility to control positioning
-@Composable
-fun IncomingSmsNotification(show: Boolean, otp: String, modifier: Modifier = Modifier) {
-    AnimatedVisibility(
-        visible = show,
-        enter = slideInVertically(initialOffsetY = { -it }),
-        exit = slideOutVertically(targetOffsetY = { -it }),
-        modifier = modifier // Apply the alignment modifier here
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                // FIX: Use windowInsetsPadding to push the notification below the system status bar
-                .windowInsetsPadding(WindowInsets.statusBars)
-                .padding(horizontal = 16.dp)
-                .padding(top = 16.dp)
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFF2C2C2E).copy(alpha = 0.95f))
-                    .padding(vertical = 10.dp)
-                    .padding(horizontal = 16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "SPACEKAYAK",
-                        color = Color.White.copy(alpha = 0.8f),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        // Displaying the dynamically generated random OTP
-                        text = "Your OTP is $otp. Do not share it with anyone.",
-                        color = Color.White,
-                        fontSize = 14.sp
-                    )
-                }
-                Text(
-                    text = "now",
-                    color = Color.White.copy(alpha = 0.6f),
-                    fontSize = 12.sp,
-                    modifier = Modifier.padding(start = 8.dp)
-                )
             }
         }
     }
@@ -351,7 +331,13 @@ fun HeaderSection(title: String, subtitle: String, onClose: () -> Unit) {
 }
 
 @Composable
-fun OtpCell(value: String, onValueChange: (String) -> Unit, modifier: Modifier, focusRequester: FocusRequester) {
+fun OtpCell(
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier,
+    focusRequester: FocusRequester,
+    enabled: Boolean = true
+) {
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
@@ -369,7 +355,8 @@ fun OtpCell(value: String, onValueChange: (String) -> Unit, modifier: Modifier, 
         shape = RoundedCornerShape(8.dp),
         modifier = modifier
             .height(56.dp)
-            .focusRequester(focusRequester)
+            .focusRequester(focusRequester),
+        enabled = enabled
     )
 }
 
