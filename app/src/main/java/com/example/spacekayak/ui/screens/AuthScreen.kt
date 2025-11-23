@@ -1,5 +1,3 @@
-// Contains the Composable functions for the phone verification modal, with smart OTP cell management
-
 package com.example.spacekayak.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
@@ -47,10 +45,9 @@ fun AuthFlowModal(viewModel: AuthViewModel) {
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = 0.5f)),
         ) {
-            // Modal content is explicitly aligned to the bottom
             Column(
                 modifier = Modifier
-                    .align(Alignment.BottomCenter) // Explicitly align modal to the bottom
+                    .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
                     .background(Color(0xFF0C2442))
@@ -194,7 +191,6 @@ fun OtpInputScreen(viewModel: AuthViewModel) {
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             repeat(length) { index ->
-                // Get the digit at this position (space means empty)
                 val cellValue = otpInput.getOrNull(index)?.let {
                     if (it == ' ') "" else it.toString()
                 } ?: ""
@@ -203,16 +199,12 @@ fun OtpInputScreen(viewModel: AuthViewModel) {
                     value = cellValue,
                     onValueChange = { newValue ->
                         if (newValue.isEmpty()) {
-                            // Backspace pressed on this cell
                             viewModel.updateOtpAtIndex(index, "")
-                            // Move focus to previous cell if available
                             if (index > 0) {
                                 focusRequesters.getOrNull(index - 1)?.requestFocus()
                             }
                         } else if (newValue.length == 1 && newValue[0].isDigit()) {
-                            // Single digit entered
                             viewModel.updateOtpAtIndex(index, newValue)
-                            // Auto-advance to next cell if available
                             if (index < length - 1) {
                                 focusRequesters.getOrNull(index + 1)?.requestFocus()
                             }
@@ -227,7 +219,6 @@ fun OtpInputScreen(viewModel: AuthViewModel) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Error message and resend logic in one row
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -235,20 +226,17 @@ fun OtpInputScreen(viewModel: AuthViewModel) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Error Message (Left)
             if (otpError) {
                 Text(
                     text = "Invalid OTP. Please try again.",
-                    color = Color(0xFFE53935), // Red color
+                    color = Color(0xFFE53935),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
                 )
             } else {
-                // Spacer to ensure resend logic stays on the right when no error
                 Spacer(modifier = Modifier.width(1.dp))
             }
 
-            // Resend Logic (Right)
             if (timer > 0) {
                 Text(
                     text = "Resend code in $timer s",
@@ -258,7 +246,6 @@ fun OtpInputScreen(viewModel: AuthViewModel) {
             } else {
                 TextButton(
                     onClick = viewModel::resendOtp,
-                    // Remove default padding for a tighter fit in the row
                     contentPadding = PaddingValues(0.dp)
                 ) {
                     Text(
@@ -300,14 +287,13 @@ fun VerificationSuccessScreen(viewModel: AuthViewModel) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .height(450.dp) // Fixed height to position content clearly in the modal
+            .height(450.dp)
             .padding(horizontal = 24.dp)
             .padding(top = 40.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.SpaceBetween
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            // Icon (Approximation of the circular blue checkmark from OTP.png)
             Box(
                 modifier = Modifier
                     .size(100.dp)
@@ -344,7 +330,6 @@ fun VerificationSuccessScreen(viewModel: AuthViewModel) {
             )
         }
 
-        // Button to dismiss the modal and proceed to the app
         Button(
             onClick = viewModel::completeVerificationFlow,
             modifier = Modifier

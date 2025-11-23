@@ -9,8 +9,4 @@ class LocalStorage(context: Context) {
     fun saveOnboarding(completed: Boolean) {
         pref.edit { putBoolean("onboarding_complete",completed) }
     }
-
-    fun isOnboardingFinished():Boolean {
-        return pref.getBoolean("onboarding_complete",false)
-    }
 }
