@@ -31,6 +31,8 @@ import com.example.spacekayak.viewmodel.AuthViewModel
 fun AuthFlowModal(viewModel: AuthViewModel) {
     val isVisible by viewModel.showPhoneVerificationModal.collectAsState()
     val authState by viewModel.authState.collectAsState()
+    val showSmsNotification by viewModel.showSmsNotification.collectAsState()
+    val generatedOtp by viewModel.generatedOtp.collectAsState()
 
     AnimatedVisibility(
         visible = isVisible,
@@ -41,10 +43,11 @@ fun AuthFlowModal(viewModel: AuthViewModel) {
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = 0.5f)),
-            contentAlignment = Alignment.BottomCenter
         ) {
+            // Modal content is explicitly aligned to the bottom
             Column(
                 modifier = Modifier
+                    .align(Alignment.BottomCenter) // Explicitly align modal to the bottom
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
                     .background(Color(0xFF0C2442))
@@ -62,6 +65,13 @@ fun AuthFlowModal(viewModel: AuthViewModel) {
                     }
                 }
             }
+
+            // Notification content is explicitly aligned to the top center
+            IncomingSmsNotification(
+                show = showSmsNotification,
+                otp = generatedOtp,
+                modifier = Modifier.align(Alignment.TopCenter) // Align notification to top center
+            )
         }
     }
 }
@@ -191,11 +201,14 @@ fun OtpInputScreen(viewModel: AuthViewModel) {
                     value = otpInput.getOrNull(index)?.toString() ?: "",
                     onValueChange = { newValue ->
                         if (newValue.length == 1) {
-                            val newOtp = otpInput.padEnd(index, ' ').replaceRange(index, index + 1, newValue)
+                            // FIX: Added +1 to padEnd to prevent IndexOutOfBoundsException
+                            val newOtp = otpInput.padEnd(index + 1, ' ').replaceRange(index, index + 1, newValue)
                             viewModel.updateOtpInput(newOtp.replace(" ", ""))
                         } else if (newValue.isEmpty() && index > 0) {
-                            val newOtp = otpInput.replaceRange(index - 1, index, "")
-                            viewModel.updateOtpInput(newOtp)
+                            if (otpInput.isNotEmpty()) {
+                                val newOtp = otpInput.dropLast(1)
+                                viewModel.updateOtpInput(newOtp)
+                            }
                             focusRequesters.getOrNull(index - 1)?.requestFocus()
                         }
                     },
@@ -247,6 +260,57 @@ fun OtpInputScreen(viewModel: AuthViewModel) {
                         fontSize = 14.sp
                     )
                 }
+            }
+        }
+    }
+}
+
+// Updated to accept a modifier and use it on the AnimatedVisibility to control positioning
+@Composable
+fun IncomingSmsNotification(show: Boolean, otp: String, modifier: Modifier = Modifier) {
+    AnimatedVisibility(
+        visible = show,
+        enter = slideInVertically(initialOffsetY = { -it }),
+        exit = slideOutVertically(targetOffsetY = { -it }),
+        modifier = modifier // Apply the alignment modifier here
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                // FIX: Use windowInsetsPadding to push the notification below the system status bar
+                .windowInsetsPadding(WindowInsets.statusBars)
+                .padding(horizontal = 16.dp)
+                .padding(top = 16.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color(0xFF2C2C2E).copy(alpha = 0.95f))
+                    .padding(vertical = 10.dp)
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "SPACEKAYAK",
+                        color = Color.White.copy(alpha = 0.8f),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        // Displaying the dynamically generated random OTP
+                        text = "Your OTP is $otp. Do not share it with anyone.",
+                        color = Color.White,
+                        fontSize = 14.sp
+                    )
+                }
+                Text(
+                    text = "now",
+                    color = Color.White.copy(alpha = 0.6f),
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(start = 8.dp)
+                )
             }
         }
     }

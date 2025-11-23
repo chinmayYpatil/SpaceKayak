@@ -1,3 +1,5 @@
+// Manages authentication state and logic, including random OTP generation and notification.
+
 package com.example.spacekayak.viewmodel
 
 import androidx.lifecycle.ViewModel
@@ -26,6 +28,16 @@ class AuthViewModel: ViewModel() {
     private val _resendTimer = MutableStateFlow(0)
     val resendTimer: StateFlow<Int> = _resendTimer
 
+    private val _showSmsNotification = MutableStateFlow(false)
+    val showSmsNotification: StateFlow<Boolean> = _showSmsNotification
+
+    private val _generatedOtp = MutableStateFlow("123456")
+    val generatedOtp: StateFlow<String> = _generatedOtp
+
+    private fun generateRandomOtp(): String {
+        return (100000..999999).random().toString()
+    }
+
     fun showPhoneVerificationModal() {
         _showPhoneVerificationModal.value = true
     }
@@ -44,9 +56,14 @@ class AuthViewModel: ViewModel() {
     }
 
     fun sendOtp() {
-        // Supabase function to send OTP will be called here
         _authState.value = 1
-        startResendTimer()
+        viewModelScope.launch {
+            delay(1000L)
+
+            _generatedOtp.value = generateRandomOtp()
+            startResendTimer()
+            showIncomingSmsNotification()
+        }
     }
 
     fun startResendTimer() {
@@ -60,12 +77,23 @@ class AuthViewModel: ViewModel() {
         }
     }
 
+    fun showIncomingSmsNotification() {
+        viewModelScope.launch {
+            _showSmsNotification.value = true
+            delay(10000L)
+            _showSmsNotification.value = false
+        }
+    }
+
     fun resendOtp() {
         // Supabase resend OTP function call
+        _generatedOtp.value = generateRandomOtp()
         startResendTimer()
+        showIncomingSmsNotification()
     }
 
     fun verifyOtp() {
+
         // Supabase OTP verification function call
         hidePhoneVerificationModal()
     }
