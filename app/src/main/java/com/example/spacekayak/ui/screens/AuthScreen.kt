@@ -1,4 +1,4 @@
-// Contains the Composable functions for the phone verification modal, with the OTP crash fix and the SMS notification repositioned to the top center.
+// Contains the Composable functions for the phone verification modal, with smart OTP cell management
 
 package com.example.spacekayak.ui.screens
 
@@ -36,7 +36,6 @@ import com.example.spacekayak.viewmodel.AuthViewModel
 fun AuthFlowModal(viewModel: AuthViewModel) {
     val isVisible by viewModel.showPhoneVerificationModal.collectAsState()
     val authState by viewModel.authState.collectAsState()
-    // REMOVED: showSmsNotification and generatedOtp as they no longer exist in AuthViewModel
 
     AnimatedVisibility(
         visible = isVisible,
@@ -70,8 +69,6 @@ fun AuthFlowModal(viewModel: AuthViewModel) {
                     }
                 }
             }
-
-            // REMOVED: IncomingSmsNotification call as it relies on removed states
         }
     }
 }
@@ -177,7 +174,6 @@ fun OtpInputScreen(viewModel: AuthViewModel) {
             focusRequesters.last().freeFocus()
         }
     }
-
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -198,19 +194,27 @@ fun OtpInputScreen(viewModel: AuthViewModel) {
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             repeat(length) { index ->
+                // Get the digit at this position (space means empty)
+                val cellValue = otpInput.getOrNull(index)?.let {
+                    if (it == ' ') "" else it.toString()
+                } ?: ""
+
                 OtpCell(
-                    value = otpInput.getOrNull(index)?.toString() ?: "",
+                    value = cellValue,
                     onValueChange = { newValue ->
-                        if (newValue.length == 1) {
-                            // Logic for entering a digit
-                            val newOtp = otpInput.padEnd(index + 1, ' ').replaceRange(index, index + 1, newValue)
-                            viewModel.updateOtpInput(newOtp.replace(" ", ""))
-                        } else if (newValue.isEmpty() && index > 0) {
-                            // FIX: Corrected Backspace Logic: Only process backspace if it's the last character
-                            if (index == otpInput.length) {
-                                val newOtp = otpInput.dropLast(1)
-                                viewModel.updateOtpInput(newOtp)
+                        if (newValue.isEmpty()) {
+                            // Backspace pressed on this cell
+                            viewModel.updateOtpAtIndex(index, "")
+                            // Move focus to previous cell if available
+                            if (index > 0) {
                                 focusRequesters.getOrNull(index - 1)?.requestFocus()
+                            }
+                        } else if (newValue.length == 1 && newValue[0].isDigit()) {
+                            // Single digit entered
+                            viewModel.updateOtpAtIndex(index, newValue)
+                            // Auto-advance to next cell if available
+                            if (index < length - 1) {
+                                focusRequesters.getOrNull(index + 1)?.requestFocus()
                             }
                         }
                     },
@@ -223,7 +227,7 @@ fun OtpInputScreen(viewModel: AuthViewModel) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // FIX: Combined error message and resend logic in one row
+        // Error message and resend logic in one row
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -266,7 +270,6 @@ fun OtpInputScreen(viewModel: AuthViewModel) {
                 }
             }
         }
-        // END FIX
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -278,7 +281,7 @@ fun OtpInputScreen(viewModel: AuthViewModel) {
                 .height(56.dp),
             colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
             shape = RoundedCornerShape(30.dp),
-            enabled = otpInput.length == 6
+            enabled = otpInput.length == 6 && !otpInput.contains(' ')
         ) {
             Text(
                 text = "Verify",
@@ -287,8 +290,7 @@ fun OtpInputScreen(viewModel: AuthViewModel) {
             )
         }
 
-        // Removed the original separate resend logic
-        Spacer(modifier = Modifier.height(16.dp)) // Maintain some bottom padding
+        Spacer(modifier = Modifier.height(16.dp))
 
     }
 }
@@ -361,8 +363,6 @@ fun VerificationSuccessScreen(viewModel: AuthViewModel) {
     }
 }
 
-// REMOVED: IncomingSmsNotification composable definition as it is no longer used.
-
 @Composable
 fun HeaderSection(title: String, subtitle: String, onClose: () -> Unit) {
     Row(
@@ -412,7 +412,6 @@ fun OtpCell(
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Center),
         colors = OutlinedTextFieldDefaults.colors(
-            // FIX: Set border to red if error is true
             focusedBorderColor = if (isError) Color(0xFFE53935) else PrimaryBlue,
             unfocusedBorderColor = if (isError) Color(0xFFE53935) else Color.White.copy(alpha = 0.2f),
             focusedContainerColor = Color.White.copy(alpha = 0.2f),
