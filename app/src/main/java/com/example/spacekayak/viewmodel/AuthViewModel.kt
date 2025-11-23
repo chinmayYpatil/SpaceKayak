@@ -2,7 +2,7 @@ package com.example.spacekayak.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.spacekayak.data.supabase // Import the client instance from SupabaseClient.kt
+import com.example.spacekayak.data.supabase
 import io.github.jan.supabase.auth.OtpType
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.builtin.OTP
@@ -15,6 +15,7 @@ import kotlinx.coroutines.launch
 class AuthViewModel: ViewModel() {
     private var timerJob: Job? = null
 
+    // 0: Phone Input, 1: OTP Input, 2: Verification Success
     private val _authState = MutableStateFlow(0)
     val authState: StateFlow<Int> = _authState
 
@@ -48,6 +49,12 @@ class AuthViewModel: ViewModel() {
         _authState.value = 0
         _otpInput.value = ""
         _errorMessage.value = null
+    }
+
+    // New function for the button and delayed action
+    fun continueToApp() {
+        // This function will be called by the "Continue to App" button OR automatically after a delay
+        hidePhoneVerificationModal()
     }
 
     fun updatePhoneNumber(newNumber: String) {
@@ -102,7 +109,9 @@ class AuthViewModel: ViewModel() {
         _errorMessage.value = null
         _isLoading.value = true
         val fullNumber = getFullPhoneNumber()
-        val otp = _otpInput.value
+
+        // UPDATED: Remove spaces (placeholders) before verification
+        val otp = _otpInput.value.replace(" ", "")
 
         viewModelScope.launch {
             try {
@@ -112,7 +121,9 @@ class AuthViewModel: ViewModel() {
                     token = otp,
                     type = OtpType.Phone.SMS
                 )
-                hidePhoneVerificationModal()
+
+                // SUCCESS: Transition to the success screen state (2)
+                _authState.value = 2
 
             } catch (e: Exception) {
                 e.printStackTrace()

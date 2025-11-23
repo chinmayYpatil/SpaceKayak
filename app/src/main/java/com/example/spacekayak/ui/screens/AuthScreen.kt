@@ -176,22 +176,14 @@ fun OtpInputScreen(viewModel: AuthViewModel) {
     val isLoading by viewModel.isLoading.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
 
-
     val length = 6
     val focusRequesters = remember { List(length) { FocusRequester() } }
 
-    LaunchedEffect(otpInput) {
-        if (otpInput.length < length) {
-            focusRequesters.getOrNull(otpInput.length)?.requestFocus()
-        } else {
-            focusRequesters.last().freeFocus()
-        }
-    }
+    // Removed the LaunchedEffect here because manual focus management
+    // inside onValueChange is more reliable for this "fixed slots" approach.
 
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(bottom = 0.dp)
+        modifier = Modifier.fillMaxWidth()
     ) {
         HeaderSection(
             title = "Enter OTP",
@@ -208,23 +200,53 @@ fun OtpInputScreen(viewModel: AuthViewModel) {
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             repeat(length) { index ->
+                // Helper to handle 'empty' slots stored as spaces
+                val charAtIndex = otpInput.getOrNull(index)
+                val cellValue = if (charAtIndex == null || charAtIndex == ' ') "" else charAtIndex.toString()
+
                 OtpCell(
-                    value = otpInput.getOrNull(index)?.toString() ?: "",
+                    value = cellValue,
                     onValueChange = { newValue ->
                         if (!isLoading) {
-                            if (newValue.length == 1) {
-                                val newOtp = otpInput.padEnd(index + 1, ' ').replaceRange(index, index + 1, newValue)
-                                viewModel.updateOtpInput(newOtp.replace(" ", ""))
-                            } else if (newValue.isEmpty() && index > 0) {
-                                if (otpInput.isNotEmpty()) {
-                                    val newOtp = otpInput.dropLast(1)
-                                    viewModel.updateOtpInput(newOtp)
+                            // 1. Prepare a fixed-size list of 6 chars, padded with spaces
+                            val charList = otpInput.padEnd(length, ' ').toMutableList()
+
+                            when {
+                                // Case: Backspace (newValue is empty)
+                                newValue.isEmpty() -> {
+                                    // Clear ONLY this cell by setting it to space
+                                    charList[index] = ' '
+
+                                    // Save to ViewModel (preserves spaces like "1 3")
+                                    viewModel.updateOtpInput(charList.joinToString(""))
+
+                                    // Move focus to previous cell
+                                    if (index > 0) {
+                                        focusRequesters[index - 1].requestFocus()
+                                    }
                                 }
-                                focusRequesters.getOrNull(index - 1)?.requestFocus()
+
+                                // Case: Typing (newValue has content)
+                                newValue.isNotEmpty() -> {
+                                    // Take the last digit entered (handles cases where cell was already filled)
+                                    val digit = newValue.lastOrNull { it.isDigit() }
+
+                                    if (digit != null) {
+                                        charList[index] = digit
+                                        viewModel.updateOtpInput(charList.joinToString(""))
+
+                                        // Auto-advance to next cell
+                                        if (index < length - 1) {
+                                            focusRequesters[index + 1].requestFocus()
+                                        }
+                                    }
+                                }
                             }
                         }
                     },
-                    modifier = Modifier.weight(1f).padding(horizontal = 4.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 4.dp),
                     focusRequester = focusRequesters[index],
                     enabled = !isLoading
                 )
@@ -252,7 +274,7 @@ fun OtpInputScreen(viewModel: AuthViewModel) {
                 .height(56.dp),
             colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
             shape = RoundedCornerShape(30.dp),
-            enabled = otpInput.length == 6 && !isLoading
+            enabled = otpInput.replace(" ", "").length == 6 && !isLoading
         ) {
             if (isLoading) {
                 CircularProgressIndicator(color = Color.White)
