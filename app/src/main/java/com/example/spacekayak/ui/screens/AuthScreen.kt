@@ -1,3 +1,5 @@
+// Contains the Composable functions for the phone verification modal, with the OTP crash fix and the SMS notification repositioned to the top center.
+
 package com.example.spacekayak.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
@@ -6,10 +8,12 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -17,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -31,6 +36,7 @@ import com.example.spacekayak.viewmodel.AuthViewModel
 fun AuthFlowModal(viewModel: AuthViewModel) {
     val isVisible by viewModel.showPhoneVerificationModal.collectAsState()
     val authState by viewModel.authState.collectAsState()
+    // REMOVED: showSmsNotification and generatedOtp as they no longer exist in AuthViewModel
 
     AnimatedVisibility(
         visible = isVisible,
@@ -42,9 +48,10 @@ fun AuthFlowModal(viewModel: AuthViewModel) {
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = 0.5f)),
         ) {
+            // Modal content is explicitly aligned to the bottom
             Column(
                 modifier = Modifier
-                    .align(Alignment.BottomCenter)
+                    .align(Alignment.BottomCenter) // Explicitly align modal to the bottom
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
                     .background(Color(0xFF0C2442))
@@ -52,16 +59,19 @@ fun AuthFlowModal(viewModel: AuthViewModel) {
                     .padding(
                         bottom = WindowInsets.ime
                             .asPaddingValues()
-                            .calculateBottomPadding() * 0.5f
+                            .calculateBottomPadding()*0.5f
                     )
             ) {
                 Crossfade(targetState = authState) { state ->
                     when (state) {
                         0 -> PhoneInputScreen(viewModel)
                         1 -> OtpInputScreen(viewModel)
+                        2 -> VerificationSuccessScreen(viewModel)
                     }
                 }
             }
+
+            // REMOVED: IncomingSmsNotification call as it relies on removed states
         }
     }
 }
@@ -69,8 +79,6 @@ fun AuthFlowModal(viewModel: AuthViewModel) {
 @Composable
 fun PhoneInputScreen(viewModel: AuthViewModel) {
     val phoneNumber by viewModel.phoneNumber.collectAsState()
-    val isLoading by viewModel.isLoading.collectAsState()
-    val errorMessage by viewModel.errorMessage.collectAsState()
 
     Column(
         modifier = Modifier
@@ -122,19 +130,7 @@ fun PhoneInputScreen(viewModel: AuthViewModel) {
                 shape = RoundedCornerShape(8.dp),
                 modifier = Modifier
                     .weight(1f)
-                    .height(56.dp),
-                enabled = !isLoading
-            )
-        }
-
-        if (errorMessage != null) {
-            Text(
-                text = errorMessage!!,
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp)
-                    .padding(top = 8.dp)
+                    .height(56.dp)
             )
         }
 
@@ -148,17 +144,13 @@ fun PhoneInputScreen(viewModel: AuthViewModel) {
                 .height(56.dp),
             colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
             shape = RoundedCornerShape(30.dp),
-            enabled = phoneNumber.length == 10 && !isLoading
+            enabled = phoneNumber.length == 10
         ) {
-            if (isLoading) {
-                CircularProgressIndicator(color = Color.White)
-            } else {
-                Text(
-                    text = "Continue",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
+            Text(
+                text = "Continue",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold
+            )
         }
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -173,11 +165,18 @@ fun OtpInputScreen(viewModel: AuthViewModel) {
     val otpInput by viewModel.otpInput.collectAsState()
     val timer by viewModel.resendTimer.collectAsState()
     val phoneNumber by viewModel.phoneNumber.collectAsState()
-    val isLoading by viewModel.isLoading.collectAsState()
-    val errorMessage by viewModel.errorMessage.collectAsState()
+    val otpError by viewModel.otpError.collectAsState()
 
     val length = 6
     val focusRequesters = remember { List(length) { FocusRequester() } }
+
+    LaunchedEffect(otpInput) {
+        if (otpInput.length < length) {
+            focusRequesters.getOrNull(otpInput.length)?.requestFocus()
+        } else {
+            focusRequesters.last().freeFocus()
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -199,101 +198,53 @@ fun OtpInputScreen(viewModel: AuthViewModel) {
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             repeat(length) { index ->
-                // Helper to handle 'empty' slots stored as spaces
-                val charAtIndex = otpInput.getOrNull(index)
-                val cellValue = if (charAtIndex == null || charAtIndex == ' ') "" else charAtIndex.toString()
-
                 OtpCell(
-                    value = cellValue,
+                    value = otpInput.getOrNull(index)?.toString() ?: "",
                     onValueChange = { newValue ->
-                        if (!isLoading) {
-                            // 1. Prepare a fixed-size list of 6 chars, padded with spaces
-                            val charList = otpInput.padEnd(length, ' ').toMutableList()
-
-                            when {
-                                // Case: Backspace (newValue is empty)
-                                newValue.isEmpty() -> {
-                                    // Clear ONLY this cell by setting it to space
-                                    charList[index] = ' '
-
-                                    // Save to ViewModel (preserves spaces like "1 3")
-                                    viewModel.updateOtpInput(charList.joinToString(""))
-
-                                    // Move focus to previous cell
-                                    if (index > 0) {
-                                        focusRequesters[index - 1].requestFocus()
-                                    }
-                                }
-
-                                // Case: Typing (newValue has content)
-                                newValue.isNotEmpty() -> {
-                                    // Take the last digit entered (handles cases where cell was already filled)
-                                    val digit = newValue.lastOrNull { it.isDigit() }
-
-                                    if (digit != null) {
-                                        charList[index] = digit
-                                        viewModel.updateOtpInput(charList.joinToString(""))
-
-                                        // Auto-advance to next cell
-                                        if (index < length - 1) {
-                                            focusRequesters[index + 1].requestFocus()
-                                        }
-                                    }
-                                }
+                        if (newValue.length == 1) {
+                            // Logic for entering a digit
+                            val newOtp = otpInput.padEnd(index + 1, ' ').replaceRange(index, index + 1, newValue)
+                            viewModel.updateOtpInput(newOtp.replace(" ", ""))
+                        } else if (newValue.isEmpty() && index > 0) {
+                            // FIX: Corrected Backspace Logic: Only process backspace if it's the last character
+                            if (index == otpInput.length) {
+                                val newOtp = otpInput.dropLast(1)
+                                viewModel.updateOtpInput(newOtp)
+                                focusRequesters.getOrNull(index - 1)?.requestFocus()
                             }
                         }
                     },
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(horizontal = 4.dp),
+                    modifier = Modifier.weight(1f).padding(horizontal = 4.dp),
                     focusRequester = focusRequesters[index],
-                    enabled = !isLoading
-                )
-            }
-        }
-
-        if (errorMessage != null) {
-            Text(
-                text = errorMessage!!,
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp)
-                    .padding(top = 8.dp)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        Button(
-            onClick = viewModel::verifyOtp,
-            modifier = Modifier
-                .padding(horizontal = 24.dp)
-                .fillMaxWidth()
-                .height(56.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
-            shape = RoundedCornerShape(30.dp),
-            enabled = otpInput.replace(" ", "").length == 6 && !isLoading
-        ) {
-            if (isLoading) {
-                CircularProgressIndicator(color = Color.White)
-            } else {
-                Text(
-                    text = "Verify",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold
+                    isError = otpError
                 )
             }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        // FIX: Combined error message and resend logic in one row
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 24.dp),
-            horizontalArrangement = Arrangement.Center
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
+            // Error Message (Left)
+            if (otpError) {
+                Text(
+                    text = "Invalid OTP. Please try again.",
+                    color = Color(0xFFE53935), // Red color
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            } else {
+                // Spacer to ensure resend logic stays on the right when no error
+                Spacer(modifier = Modifier.width(1.dp))
+            }
+
+            // Resend Logic (Right)
             if (timer > 0) {
                 Text(
                     text = "Resend code in $timer s",
@@ -303,7 +254,8 @@ fun OtpInputScreen(viewModel: AuthViewModel) {
             } else {
                 TextButton(
                     onClick = viewModel::resendOtp,
-                    enabled = !isLoading
+                    // Remove default padding for a tighter fit in the row
+                    contentPadding = PaddingValues(0.dp)
                 ) {
                     Text(
                         text = "Resend Code",
@@ -314,8 +266,102 @@ fun OtpInputScreen(viewModel: AuthViewModel) {
                 }
             }
         }
+        // END FIX
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Button(
+            onClick = viewModel::verifyOtp,
+            modifier = Modifier
+                .padding(horizontal = 24.dp)
+                .fillMaxWidth()
+                .height(56.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
+            shape = RoundedCornerShape(30.dp),
+            enabled = otpInput.length == 6
+        ) {
+            Text(
+                text = "Verify",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        // Removed the original separate resend logic
+        Spacer(modifier = Modifier.height(16.dp)) // Maintain some bottom padding
+
     }
 }
+
+@Composable
+fun VerificationSuccessScreen(viewModel: AuthViewModel) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(450.dp) // Fixed height to position content clearly in the modal
+            .padding(horizontal = 24.dp)
+            .padding(top = 40.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            // Icon (Approximation of the circular blue checkmark from OTP.png)
+            Box(
+                modifier = Modifier
+                    .size(100.dp)
+                    .clip(CircleShape)
+                    .background(Brush.radialGradient(listOf(Color(0xFF00BFFF), PrimaryBlue))),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.CheckCircle,
+                    contentDescription = "Verified",
+                    tint = Color.White,
+                    modifier = Modifier.size(70.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            Text(
+                text = "Your phone is verified securely.",
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+                color = Color.White
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "OTP Verified safely with an OTP. Stay alert on fake OTP scams.",
+                fontSize = 14.sp,
+                textAlign = TextAlign.Center,
+                color = Color.White.copy(alpha = 0.7f),
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+        }
+
+        // Button to dismiss the modal and proceed to the app
+        Button(
+            onClick = viewModel::completeVerificationFlow,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp)
+                .padding(bottom = 12.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
+            shape = RoundedCornerShape(30.dp)
+        ) {
+            Text(
+                text = "Continue to App",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
+
+// REMOVED: IncomingSmsNotification composable definition as it is no longer used.
 
 @Composable
 fun HeaderSection(title: String, subtitle: String, onClose: () -> Unit) {
@@ -357,7 +403,7 @@ fun OtpCell(
     onValueChange: (String) -> Unit,
     modifier: Modifier,
     focusRequester: FocusRequester,
-    enabled: Boolean = true
+    isError: Boolean
 ) {
     OutlinedTextField(
         value = value,
@@ -366,8 +412,9 @@ fun OtpCell(
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Center),
         colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = PrimaryBlue,
-            unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+            // FIX: Set border to red if error is true
+            focusedBorderColor = if (isError) Color(0xFFE53935) else PrimaryBlue,
+            unfocusedBorderColor = if (isError) Color(0xFFE53935) else Color.White.copy(alpha = 0.2f),
             focusedContainerColor = Color.White.copy(alpha = 0.2f),
             unfocusedContainerColor = Color.White.copy(alpha = 0.2f),
             focusedTextColor = Color.White,
@@ -376,8 +423,7 @@ fun OtpCell(
         shape = RoundedCornerShape(8.dp),
         modifier = modifier
             .height(56.dp)
-            .focusRequester(focusRequester),
-        enabled = enabled
+            .focusRequester(focusRequester)
     )
 }
 

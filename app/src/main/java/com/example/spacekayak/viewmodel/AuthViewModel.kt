@@ -2,7 +2,7 @@ package com.example.spacekayak.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.spacekayak.data.supabase
+import com.example.spacekayak.data.supabase // Ensure this is a valid import for your Supabase client
 import io.github.jan.supabase.auth.OtpType
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.builtin.OTP
@@ -28,6 +28,10 @@ class AuthViewModel: ViewModel() {
     private val _otpInput = MutableStateFlow("")
     val otpInput: StateFlow<String> = _otpInput
 
+    // State for OTP validation error (used by UI for red border and error text)
+    private val _otpError = MutableStateFlow(false)
+    val otpError: StateFlow<Boolean> = _otpError
+
     private val _resendTimer = MutableStateFlow(0)
     val resendTimer: StateFlow<Int> = _resendTimer
 
@@ -49,10 +53,11 @@ class AuthViewModel: ViewModel() {
         _authState.value = 0
         _otpInput.value = ""
         _errorMessage.value = null
+        _otpError.value = false // Reset OTP error state
     }
 
     // New function for the button and delayed action
-    fun continueToApp() {
+    fun completeVerificationFlow() {
         // This function will be called by the "Continue to App" button OR automatically after a delay
         hidePhoneVerificationModal()
     }
@@ -63,11 +68,13 @@ class AuthViewModel: ViewModel() {
 
     fun updateOtpInput(newOtp: String) {
         if (newOtp.length <= 6) _otpInput.value = newOtp
+        _otpError.value = false // Clear OTP error when user changes input
     }
 
     fun sendOtp() {
         _errorMessage.value = null
         _isLoading.value = true
+        _otpError.value = false
         val fullNumber = getFullPhoneNumber()
 
         viewModelScope.launch {
@@ -124,10 +131,14 @@ class AuthViewModel: ViewModel() {
 
                 // SUCCESS: Transition to the success screen state (2)
                 _authState.value = 2
+                _otpError.value = false
 
             } catch (e: Exception) {
                 e.printStackTrace()
                 _errorMessage.value = "OTP verification failed. Please check the code and try again."
+                _otpError.value = true // FAILURE: Set the error state here
+                _resendTimer.value = 0 // FIX: Reset timer immediately on failed verification
+                timerJob?.cancel()
             } finally {
                 _isLoading.value = false
             }
