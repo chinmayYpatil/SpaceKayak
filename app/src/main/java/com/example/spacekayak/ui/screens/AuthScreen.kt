@@ -179,11 +179,10 @@ fun OtpInputScreen(viewModel: AuthViewModel) {
     val length = 6
     val focusRequesters = remember { List(length) { FocusRequester() } }
 
-    // Removed the LaunchedEffect here because manual focus management
-    // inside onValueChange is more reliable for this "fixed slots" approach.
-
     Column(
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 150.dp)
     ) {
         HeaderSection(
             title = "Enter OTP",
